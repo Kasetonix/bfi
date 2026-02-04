@@ -31,10 +31,8 @@ int main(int argc, char *argv[]) {
     u8 tape[TAPE_LEN];
     FILE *src_file = NULL;
 
-    if (argc < 2) {
-        fprintf(stderr, "Too little arguments.\n");
-        exit(1);
-    }
+    if (argc < 2)
+        error("Too little arguments.\n");
     const char *path = argv[1];
 
     memset(tape, 0, TAPE_LEN);
@@ -44,10 +42,6 @@ int main(int argc, char *argv[]) {
 
     if (!valid_loops(&instructions))
         error("Invalid loops found.\n");
-
-    // for (size_t i = 0; i < instructions.length; i++)
-    //     printf("%c", instructions.data[i]);
-    // printf("\n");
 
     run(&instructions, tape);
     free(instructions.data);
@@ -90,7 +84,7 @@ void da_append(CharDA *array, i8 val) {
 void open_file(FILE **file, const char* path) {
     *file = fopen(path, "r");
     if (*file == NULL) {
-        fprintf(stderr, "Couldn't open file %s.\n", path);
+        fprintf(stderr, "Couldn't open file '%s'.\n", path);
         exit(1);
     }
 }
