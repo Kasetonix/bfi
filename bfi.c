@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
     open_file(&src_file, path);
     da_init(&instructions);
     read_src_to_da(src_file, &instructions);
+    fclose(src_file);
 
     if (!valid_loops(&instructions))
         error("Invalid loops found.\n");
