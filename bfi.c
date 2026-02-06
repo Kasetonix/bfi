@@ -2,9 +2,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
 
-#define INIT_SIZE 32
+#define INIT_SIZE 128
 #define TAPE_LEN (1 << 16)
 
 typedef int8_t i8;
@@ -28,14 +27,13 @@ void run(CharDA *instructions, u8 *tape);
 
 int main(int argc, char *argv[]) {
     CharDA instructions;
-    u8 tape[TAPE_LEN];
+    u8 tape[TAPE_LEN] = { 0 };
     FILE *src_file = NULL;
 
     if (argc < 2)
         error("Too little arguments.\n");
     const char *path = argv[1];
 
-    memset(tape, 0, TAPE_LEN);
     open_file(&src_file, path);
     da_init(&instructions);
     read_src_to_da(src_file, &instructions);
@@ -50,7 +48,7 @@ int main(int argc, char *argv[]) {
 }
 
 void error(const char *msg) {
-    fprintf(stderr, "%s", msg);
+    fputs(msg, stderr);
     exit(1);
 }
 
@@ -61,8 +59,6 @@ void da_init(CharDA *array) {
 
     if (array->data == NULL)
         error("Failed to allocate memory.");
-
-    memset(array->data, 0, array->capacity);
 }
 
 void da_append(CharDA *array, i8 val) {
@@ -162,8 +158,8 @@ void process_instruction(CharDA *instructions, u8 *tape, size_t *instr_ptr, size
             if (*tape_ptr == 0)
                 error("Pointer escaped the tape.\n"); 
             (*tape_ptr)--; break;
-        case '.': printf("%c", tape[*tape_ptr]); break;
-        case ',': scanf("%c", &tape[*tape_ptr]); break;
+        case '.': putchar(tape[*tape_ptr]); break;
+        case ',': tape[*tape_ptr] = getchar(); break;
         case '[': 
             if (tape[*tape_ptr] == 0)
                 mv_closing_bracket(instructions, instr_ptr);
