@@ -113,69 +113,61 @@ bool valid_loops(CharDA *instructions) {
     return loop_count == 0? true : false;
 }
 
-void mv_closing_bracket(CharDA *instructions, size_t *instr_ptr) {
+void mv_closing_bracket(i8 **instr_ptr) {
     size_t depth = 0;
-    i8 instr;
     while (true) {
         (*instr_ptr)++;
-        instr = instructions->data[*instr_ptr];
-        if (depth == 0 && instr == ']')
+        if (depth == 0 && **instr_ptr == ']')
             break;
-        if (instr == '[')
+        if (**instr_ptr == '[')
             depth++;
-        if (instr == ']')
+        if (**instr_ptr == ']')
             depth--;
     }
 }
 
-void mv_opening_bracket(CharDA *instructions, size_t *instr_ptr) {
+void mv_opening_bracket(i8 **instr_ptr) {
     size_t depth = 0;
-    i8 instr;
     while (true) {
         (*instr_ptr)--;
-        instr = instructions->data[*instr_ptr];
-        if (depth == 0 && instr == '[')
+        if (depth == 0 && **instr_ptr == '[')
             break;
-        if (instr == ']')
+        if (**instr_ptr == ']')
             depth++;
-        if (instr == '[')
+        if (**instr_ptr == '[')
             depth--;
     }
 }
 
-void process_instruction(CharDA *instructions, u8 *tape, size_t *instr_ptr, size_t *tape_ptr) { 
-    if (*instr_ptr >= instructions->length)
-        return;
 
-    switch (instructions->data[*instr_ptr]) {
-        case '+': tape[*tape_ptr]++; break;
-        case '-': tape[*tape_ptr]--; break;
-        case '>': 
-            if (*tape_ptr == TAPE_LEN - 1)
-                error("Pointer escaped the tape.\n");
-            (*tape_ptr)++; break;
-        case '<': 
-            if (*tape_ptr == 0)
-                error("Pointer escaped the tape.\n"); 
-            (*tape_ptr)--; break;
-        case '.': putchar(tape[*tape_ptr]); break;
-        case ',': tape[*tape_ptr] = getchar(); break;
-        case '[': 
-            if (tape[*tape_ptr] == 0)
-                mv_closing_bracket(instructions, instr_ptr);
-            break;
-        case ']':
-            if (tape[*tape_ptr] != 0)
-                mv_opening_bracket(instructions, instr_ptr);
-            break;
-    }
-}
+void run(CharDA *instructions, u8 *tape_ptr) {
+    i8 *instr_ptr = instructions->data;
+    i8 *instr_end = instr_ptr + instructions->length;
+    u8 *left_tape_bound = tape_ptr;
+    u8 *right_tape_bound = tape_ptr + TAPE_LEN - 1;
 
-void run(CharDA *instructions, u8 *tape) {
-    size_t instr_ptr = 0;
-    size_t tape_ptr = 0;
-    while (instr_ptr < instructions->length) {
-        process_instruction(instructions, tape, &instr_ptr, &tape_ptr);
-        instr_ptr++;
+    while (instr_ptr <= instr_end) {
+        switch (*instr_ptr) {
+            case '+': (*tape_ptr)++; break;
+            case '-': (*tape_ptr)--; break;
+            case '>': 
+                if (tape_ptr == right_tape_bound)
+                    error("Pointer out of bounds. (>)\n");
+                tape_ptr++; break;
+            case '<': 
+                if (tape_ptr == left_tape_bound)
+                    error("Pointer out of bounds. (<)\n"); 
+                tape_ptr--; break;
+            case '.': putchar(*tape_ptr); break;
+            case ',': *tape_ptr = getchar(); break;
+            case '[': 
+                if (*tape_ptr == 0)
+                    mv_closing_bracket(&instr_ptr);
+                break;
+            case ']':
+                if (*tape_ptr != 0)
+                    mv_opening_bracket(&instr_ptr);
+                break;
+        } instr_ptr++;
     }
 }
