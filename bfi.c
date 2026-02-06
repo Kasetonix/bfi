@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 #define INIT_DA_CAPACITY 128
-#define STACK_CAPACITY 16
+#define STACK_CAPACITY 32
 #define TAPE_LEN (1 << 16)
 
 typedef int8_t i8;
@@ -32,11 +32,13 @@ void stack_push(PtrStack *stack, i8 *ptr);
 i8 *stack_pop(PtrStack *stack);
 void read_src_to_da(FILE *file, CharDA *instructions);
 bool valid_loops(CharDA *instructions);
+i8 *find_matching_cbr(i8 *instr_ptr);
+void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr);
+void handle_cbr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr);
 void run(CharDA *instructions, u8 *tape);
 
 int main(int argc, char *argv[]) {
     CharDA instructions;
-    PtrStack obr, cbr; // opening/closing bracket stack
     u8 tape[TAPE_LEN] = { 0 };
     FILE *src_file = NULL;
 
@@ -47,8 +49,6 @@ int main(int argc, char *argv[]) {
     open_file(&src_file, path);
     da_init(&instructions);
     read_src_to_da(src_file, &instructions);
-    stack_init(&obr);
-    stack_init(&cbr);
     fclose(src_file);
 
     if (!valid_loops(&instructions))
@@ -155,63 +155,77 @@ bool valid_loops(CharDA *instructions) {
     return loop_count == 0? true : false;
 }
 
-// Moves the instruction pointer to the matching closing bracket
-void mv_closing_bracket(i8 **instr_ptr) {
+// Manually finds the matching closing bracket
+i8 *find_matching_cbr(i8 *instr_ptr) {
     size_t depth = 0;
     while (true) {
-        (*instr_ptr)++;
-        if (depth == 0 && **instr_ptr == ']')
-            break;
-        if (**instr_ptr == '[')
+        instr_ptr++;
+        if (*instr_ptr == ']') {
+            if (depth == 0) break;
+            else depth--;
+        }
+
+        if (*instr_ptr == '[')
             depth++;
-        if (**instr_ptr == ']')
-            depth--;
     }
+
+    return instr_ptr;
 }
 
-// Moves the instruction pointer to the matching opening bracket
-void mv_opening_bracket(i8 **instr_ptr) {
-    size_t depth = 0;
-    while (true) {
-        (*instr_ptr)--;
-        if (depth == 0 && **instr_ptr == '[')
-            break;
-        if (**instr_ptr == ']')
-            depth++;
-        if (**instr_ptr == '[')
-            depth--;
+// Function for handling opening brackets
+void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr) {
+    if (obr->size == 0 || obr->data[obr->size - 1] != *instr_ptr)
+        stack_push(obr, *instr_ptr);
+
+    if (*tape_ptr == 0) {
+        if (obr->size == cbr->size)
+            *instr_ptr = cbr->data[cbr->size - 1];
+        else
+            *instr_ptr = find_matching_cbr(*instr_ptr);
+    } else (*instr_ptr)++;
+}
+
+// Function for handling closing brackets
+void handle_cbr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr) {
+    if (cbr->size == 0 || cbr->data[cbr->size - 1] != *instr_ptr)
+        stack_push(cbr, *instr_ptr);
+
+    if (*tape_ptr != 0)
+        *instr_ptr = obr->data[obr->size - 1];
+    else {
+        stack_pop(obr);
+        stack_pop(cbr);
+        (*instr_ptr)++;
     }
 }
 
 // Runs the program reading from instruction array
 void run(CharDA *instructions, u8 *tape_ptr) {
+    PtrStack obr, cbr; // opening/closing bracket stack
+    stack_init(&obr);
+    stack_init(&cbr);
+
     i8 *instr_ptr = instructions->data;
     i8 *instr_end = instr_ptr + instructions->length;
     u8 *left_tape_bound = tape_ptr;
     u8 *right_tape_bound = tape_ptr + TAPE_LEN - 1;
 
-    while (instr_ptr <= instr_end) {
+    while (instr_ptr < instr_end) {
         switch (*instr_ptr) {
-            case '+': (*tape_ptr)++; break;
-            case '-': (*tape_ptr)--; break;
+            case '+': (*tape_ptr)++; instr_ptr++; break;
+            case '-': (*tape_ptr)--; instr_ptr++; break;
             case '>':
                 if (tape_ptr == right_tape_bound)
                     error("[ERR]: Pointer out of bounds. (>)\n");
-                tape_ptr++; break;
+                tape_ptr++; instr_ptr++; break;
             case '<':
                 if (tape_ptr == left_tape_bound)
                     error("[ERR]: Pointer out of bounds. (<)\n");
-                tape_ptr--; break;
-            case '.': putchar(*tape_ptr); break;
-            case ',': *tape_ptr = getchar(); break;
-            case '[':
-                if (*tape_ptr == 0)
-                    mv_closing_bracket(&instr_ptr);
-                break;
-            case ']':
-                if (*tape_ptr != 0)
-                    mv_opening_bracket(&instr_ptr);
-                break;
-        } instr_ptr++;
+                tape_ptr--; instr_ptr++; break;
+            case '.': putchar(*tape_ptr); instr_ptr++; break;
+            case ',': *tape_ptr = getchar(); instr_ptr++; break;
+            case '[': handle_obr(&instr_ptr, tape_ptr, &obr, &cbr); break;
+            case ']': handle_cbr(&instr_ptr, tape_ptr, &obr, &cbr); break;
+        } 
     }
 }
