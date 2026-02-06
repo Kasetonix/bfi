@@ -20,7 +20,7 @@ typedef struct {
 typedef struct {
     size_t size;
     size_t capacity;
-    uintptr_t data[STACK_CAPACITY];
+    i8 *data[STACK_CAPACITY];
 } PtrStack;
 
 void error(const char *msg);
@@ -28,8 +28,8 @@ void open_file(FILE **file, const char* path);
 void da_init(CharDA *array);
 void da_append(CharDA *array, i8 val);
 void stack_init(PtrStack *stack);
-void stack_push(PtrStack *stack, uintptr_t ptr);
-uintptr_t stack_pop(PtrStack *stack);
+void stack_push(PtrStack *stack, i8 *ptr);
+i8 *stack_pop(PtrStack *stack);
 void read_src_to_da(FILE *file, CharDA *instructions);
 bool valid_loops(CharDA *instructions);
 void run(CharDA *instructions, u8 *tape);
@@ -107,11 +107,11 @@ void stack_init(PtrStack *stack) {
     stack->size = 0;
     stack->capacity = STACK_CAPACITY;
     for (u8 i = 0; i < stack->capacity; i++)
-        stack->data[i] = (uintptr_t) NULL;
+        stack->data[i] = NULL;
 }
 
 // Pushes a pointer onto the stack
-void stack_push(PtrStack *stack, uintptr_t ptr) {
+void stack_push(PtrStack *stack, i8 *ptr) {
     if (stack->size == stack->capacity)
         error("[ERR]: Stack overflow.\n");
     stack->data[stack->size] = ptr;
@@ -119,7 +119,7 @@ void stack_push(PtrStack *stack, uintptr_t ptr) {
 }
 
 // Pops a pointer off a stack
-uintptr_t stack_pop(PtrStack *stack) {
+i8 *stack_pop(PtrStack *stack) {
     if (stack->size == 0)
         error("[ERR]: Attemted to pop off an empty stack.\n");
     stack->size--;
