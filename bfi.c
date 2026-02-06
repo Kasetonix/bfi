@@ -28,12 +28,13 @@ void open_file(FILE **file, const char* path);
 void da_init(CharDA *array);
 void da_append(CharDA *array, i8 val);
 void stack_init(PtrStack *stack);
+i8 *stack_top(PtrStack *stack);
 void stack_push(PtrStack *stack, i8 *ptr);
 i8 *stack_pop(PtrStack *stack);
 void read_src_to_da(FILE *file, CharDA *instructions);
 bool valid_loops(CharDA *instructions);
 i8 *find_matching_cbr(i8 *instr_ptr);
-void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr);
+void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr);
 void handle_cbr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr);
 void run(CharDA *instructions, u8 *tape);
 
@@ -87,8 +88,7 @@ void da_init(CharDA *array) {
 // Appends to a dynamic array
 void da_append(CharDA *array, i8 val) {
     if (array->length < array->capacity) {
-        array->data[array->length] = val;
-        array->length++;
+        array->data[array->length++] = val;
         return;
     }
 
@@ -98,8 +98,7 @@ void da_append(CharDA *array, i8 val) {
     if (array->data == NULL)
         error("[ERR]: Failed to allocate memory.\n");
 
-    array->data[array->length] = val;
-    array->length++;
+    array->data[array->length++] = val;
 }
 
 // Initializes a stack
@@ -110,20 +109,26 @@ void stack_init(PtrStack *stack) {
         stack->data[i] = NULL;
 }
 
+// Retrieves a value from the top of the stack
+// If empty returns NULL
+i8 *stack_top(PtrStack *stack) {
+    if (stack->size == 0)
+        return NULL;
+    return stack->size > 0? stack->data[stack->size - 1] : NULL;
+}
+
 // Pushes a pointer onto the stack
 void stack_push(PtrStack *stack, i8 *ptr) {
     if (stack->size == stack->capacity)
         error("[ERR]: Stack overflow.\n");
-    stack->data[stack->size] = ptr;
-    stack->size++;
+    stack->data[stack->size++] = ptr;
 }
 
 // Pops a pointer off a stack
 i8 *stack_pop(PtrStack *stack) {
     if (stack->size == 0)
         error("[ERR]: Attemted to pop off an empty stack.\n");
-    stack->size--;
-    return stack->data[stack->size + 1];
+    return stack->data[--stack->size];
 }
 
 // Writes the source code without comments to a dynamic array
@@ -142,17 +147,17 @@ void read_src_to_da(FILE *file, CharDA *instructions) {
 
 // Checks validity of all [ ] pairs
 bool valid_loops(CharDA *instructions) {
-    i32 loop_count = 0;
+    i8 depth = 0;
     for (size_t i = 0; i < instructions->length; i++) {
         if (instructions->data[i] == '[')
-            loop_count++;
+            depth++;
         else if (instructions->data[i] == ']')
-            loop_count--;
-        if (loop_count < 0)
+            depth--;
+        if (depth < 0)
             return false;
     }
 
-    return loop_count == 0? true : false;
+    return depth == 0? true : false;
 }
 
 // Manually finds the matching closing bracket
@@ -173,29 +178,25 @@ i8 *find_matching_cbr(i8 *instr_ptr) {
 }
 
 // Function for handling opening brackets
-void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr) {
-    if (obr->size == 0 || obr->data[obr->size - 1] != *instr_ptr)
-        stack_push(obr, *instr_ptr);
-
-    if (*tape_ptr == 0) {
-        if (obr->size == cbr->size)
-            *instr_ptr = cbr->data[cbr->size - 1];
-        else
+void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr) {
+    if (stack_top(obr) != *instr_ptr) { // First entry into this obr
+        if (*tape_ptr == 0) // Immidately jumping after the manually found matching cbr
             *instr_ptr = find_matching_cbr(*instr_ptr);
-    } else (*instr_ptr)++;
+        else
+            stack_push(obr, *instr_ptr);
+    }
 }
 
 // Function for handling closing brackets
 void handle_cbr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr) {
-    if (cbr->size == 0 || cbr->data[cbr->size - 1] != *instr_ptr)
-        stack_push(cbr, *instr_ptr);
-
-    if (*tape_ptr != 0)
-        *instr_ptr = obr->data[obr->size - 1];
-    else {
+    if (*tape_ptr != 0) { // jump to matching obr
+        if (stack_top(cbr) != *instr_ptr)
+            stack_push(cbr, *instr_ptr);
+        *instr_ptr = stack_top(obr);
+    } else {
+        if (stack_top(cbr) == *instr_ptr)
+            stack_pop(cbr);
         stack_pop(obr);
-        stack_pop(cbr);
-        (*instr_ptr)++;
     }
 }
 
@@ -212,20 +213,22 @@ void run(CharDA *instructions, u8 *tape_ptr) {
 
     while (instr_ptr < instr_end) {
         switch (*instr_ptr) {
-            case '+': (*tape_ptr)++; instr_ptr++; break;
-            case '-': (*tape_ptr)--; instr_ptr++; break;
+            case '+': (*tape_ptr)++; break;
+            case '-': (*tape_ptr)--; break;
             case '>':
                 if (tape_ptr == right_tape_bound)
                     error("[ERR]: Pointer out of bounds. (>)\n");
-                tape_ptr++; instr_ptr++; break;
+                tape_ptr++; break;
             case '<':
                 if (tape_ptr == left_tape_bound)
                     error("[ERR]: Pointer out of bounds. (<)\n");
-                tape_ptr--; instr_ptr++; break;
-            case '.': putchar(*tape_ptr); instr_ptr++; break;
-            case ',': *tape_ptr = getchar(); instr_ptr++; break;
-            case '[': handle_obr(&instr_ptr, tape_ptr, &obr, &cbr); break;
+                tape_ptr--; break;
+            case '.': putchar(*tape_ptr); break;
+            case ',': *tape_ptr = getchar(); break;
+            case '[': handle_obr(&instr_ptr, tape_ptr, &obr); break;
             case ']': handle_cbr(&instr_ptr, tape_ptr, &obr, &cbr); break;
-        } 
+        }
+
+        instr_ptr++;
     }
 }
