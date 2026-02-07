@@ -6,6 +6,7 @@
 #define INIT_DA_CAPACITY 128
 #define STACK_CAPACITY 32
 #define TAPE_LEN (1 << 16)
+#define TAPE_BEG_CHARS 64
 
 typedef int8_t i8;
 typedef uint8_t u8;
@@ -33,6 +34,7 @@ void stack_push(PtrStack *stack, i8 *ptr);
 i8 *stack_pop(PtrStack *stack);
 void read_src_to_da(FILE *file, CharDA *instructions);
 bool valid_loops(CharDA *instructions);
+void print_tape(u8 *tape_left_bound, u8 *tape_ptr);
 i8 *find_matching_cbr(i8 *instr_ptr);
 void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr);
 void handle_cbr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr);
@@ -139,7 +141,7 @@ void read_src_to_da(FILE *file, CharDA *instructions) {
         if (ch == '+' || ch == '-' ||
             ch == '>' || ch == '<' ||
             ch == '[' || ch == ']' ||
-            ch == '.' || ch == ',')
+            ch == '.' || ch == ',' || ch == '#')
             da_append(instructions, ch);
         ch = fgetc(file);
     }
@@ -158,6 +160,24 @@ bool valid_loops(CharDA *instructions) {
     }
 
     return depth == 0? true : false;
+}
+
+// prints the initial TAPE_BEG_CHARS of the tape
+void print_tape(u8 *tape_left_bound, u8 *tape_ptr) {
+    u8 ch;
+    putchar('\n');
+    for (u8 i = 0; i < TAPE_BEG_CHARS; i++) {
+        ch = *(tape_left_bound + i);
+        switch (ch) {
+            case '\n': printf("\u2424"); break;
+            case ' ' : printf("\u2423"); break;
+            case '\0': printf("\u2400"); break;
+            default  : putchar(ch); break;
+        }
+    } putchar('\n');
+
+    if (tape_ptr - tape_left_bound < 64)
+        printf("%*c\n", (int) (tape_ptr - tape_left_bound), '^');
 }
 
 // Manually finds the matching closing bracket
@@ -180,7 +200,7 @@ i8 *find_matching_cbr(i8 *instr_ptr) {
 // Function for handling opening brackets
 void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr) {
     if (stack_top(obr) != *instr_ptr) { // First entry into this obr
-        if (*tape_ptr == 0) // Immidately jumping after the manually found matching cbr
+        if (*tape_ptr == 0) // Immidiately jumping after the manually found matching cbr
             *instr_ptr = find_matching_cbr(*instr_ptr);
         else
             stack_push(obr, *instr_ptr);
@@ -208,25 +228,26 @@ void run(CharDA *instructions, u8 *tape_ptr) {
 
     i8 *instr_ptr = instructions->data;
     i8 *instr_end = instr_ptr + instructions->length;
-    u8 *left_tape_bound = tape_ptr;
-    u8 *right_tape_bound = tape_ptr + TAPE_LEN - 1;
+    u8 *tape_left_bound = tape_ptr;
+    u8 *tape_right_bound = tape_ptr + TAPE_LEN - 1;
 
     while (instr_ptr < instr_end) {
         switch (*instr_ptr) {
             case '+': (*tape_ptr)++; break;
             case '-': (*tape_ptr)--; break;
             case '>':
-                if (tape_ptr == right_tape_bound)
+                if (tape_ptr == tape_right_bound)
                     error("[ERR]: Pointer out of bounds. (>)\n");
                 tape_ptr++; break;
             case '<':
-                if (tape_ptr == left_tape_bound)
+                if (tape_ptr == tape_left_bound)
                     error("[ERR]: Pointer out of bounds. (<)\n");
                 tape_ptr--; break;
             case '.': putchar(*tape_ptr); break;
             case ',': *tape_ptr = getchar(); break;
             case '[': handle_obr(&instr_ptr, tape_ptr, &obr); break;
             case ']': handle_cbr(&instr_ptr, tape_ptr, &obr, &cbr); break;
+            case '#': print_tape(tape_left_bound, tape_ptr); break;
         }
 
         instr_ptr++;
