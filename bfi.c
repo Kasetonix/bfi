@@ -34,7 +34,7 @@ void stack_push(PtrStack *stack, i8 *ptr);
 i8 *stack_pop(PtrStack *stack);
 void read_src_to_da(FILE *file, CharDA *instructions);
 bool valid_loops(CharDA *instructions);
-void print_tape(u8 *tape_left_bound, u8 *tape_ptr);
+void print_tape(u8 *tape_left_bound, u8 *tape_ptr, u8 lpc);
 i8 *find_matching_cbr(i8 *instr_ptr);
 void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr);
 void handle_cbr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr);
@@ -163,9 +163,10 @@ bool valid_loops(CharDA *instructions) {
 }
 
 // prints the initial TAPE_BEG_CHARS of the tape
-void print_tape(u8 *tape_left_bound, u8 *tape_ptr) {
+void print_tape(u8 *tape_left_bound, u8 *tape_ptr, u8 lpc) {
     u8 ch;
-    putchar('\n');
+    size_t ptr_pos;
+    if (lpc != '\n') putchar('\n');
     for (u8 i = 0; i < TAPE_BEG_CHARS; i++) {
         ch = *(tape_left_bound + i);
         switch (ch) {
@@ -176,8 +177,9 @@ void print_tape(u8 *tape_left_bound, u8 *tape_ptr) {
         }
     } putchar('\n');
 
-    if (tape_ptr - tape_left_bound < 64)
-        printf("%*c\n", (int) (tape_ptr - tape_left_bound), '^');
+    ptr_pos = tape_ptr - tape_left_bound + 1;
+    if (ptr_pos <= 64)
+        printf("%*c\n", (int) ptr_pos, '^');
 }
 
 // Manually finds the matching closing bracket
@@ -225,6 +227,7 @@ void run(CharDA *instructions, u8 *tape_ptr) {
     PtrStack obr, cbr; // opening/closing bracket stack
     stack_init(&obr);
     stack_init(&cbr);
+    u8 lpc= '\n'; // last printed char
 
     i8 *instr_ptr = instructions->data;
     i8 *instr_end = instr_ptr + instructions->length;
@@ -243,11 +246,11 @@ void run(CharDA *instructions, u8 *tape_ptr) {
                 if (tape_ptr == tape_left_bound)
                     error("[ERR]: Pointer out of bounds. (<)\n");
                 tape_ptr--; break;
-            case '.': putchar(*tape_ptr); break;
+            case '.': lpc = *tape_ptr; putchar(lpc); break;
             case ',': *tape_ptr = getchar(); break;
             case '[': handle_obr(&instr_ptr, tape_ptr, &obr); break;
             case ']': handle_cbr(&instr_ptr, tape_ptr, &obr, &cbr); break;
-            case '#': print_tape(tape_left_bound, tape_ptr); break;
+            case '#': print_tape(tape_left_bound, tape_ptr, lpc); break;
         }
 
         instr_ptr++;
