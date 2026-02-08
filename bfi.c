@@ -2,9 +2,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <wchar.h>
+#include <locale.h>
 
 #define INIT_DA_CAPACITY 128
-#define STACK_CAPACITY 32
+#define STACK_CAPACITY 64
 #define TAPE_LEN (1 << 16)
 #define TAPE_BEG_CHARS 64
 
@@ -34,6 +36,7 @@ void stack_push(PtrStack *stack, i8 *ptr);
 i8 *stack_pop(PtrStack *stack);
 void read_src_to_da(FILE *file, CharDA *instructions);
 bool valid_loops(CharDA *instructions);
+void print_cc(char code);
 void print_tape(u8 *tape_left_bound, u8 *tape_ptr, u8 lpc);
 i8 *find_matching_cbr(i8 *instr_ptr);
 void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr);
@@ -44,6 +47,7 @@ int main(int argc, char *argv[]) {
     CharDA instructions;
     u8 tape[TAPE_LEN] = { 0 };
     FILE *src_file = NULL;
+    setlocale(LC_ALL, "");
 
     if (argc < 2)
         error("[ERR]: Too little arguments.\n");
@@ -162,19 +166,23 @@ bool valid_loops(CharDA *instructions) {
     return depth == 0? true : false;
 }
 
+// prints a unicode representation of a given control character
+void print_cc(char code) {
+    wchar_t unich = u'\u2400' + code;
+    printf("%lc", unich);
+}
+
 // prints the initial TAPE_BEG_CHARS of the tape
 void print_tape(u8 *tape_left_bound, u8 *tape_ptr, u8 lpc) {
     u8 ch;
     size_t ptr_pos;
+
     if (lpc != '\n') putchar('\n');
     for (u8 i = 0; i < TAPE_BEG_CHARS; i++) {
         ch = *(tape_left_bound + i);
-        switch (ch) {
-            case '\n': printf("\u2424"); break;
-            case ' ' : printf("\u2423"); break;
-            case '\0': printf("\u2400"); break;
-            default  : putchar(ch); break;
-        }
+        if (ch >= 33) putchar(ch);
+        else if (ch == 32) print_cc(35); 
+        else print_cc(ch);
     } putchar('\n');
 
     ptr_pos = tape_ptr - tape_left_bound + 1;
