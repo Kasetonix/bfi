@@ -195,8 +195,10 @@ void print_tape(u8 *tape_left_bound, u8 *tape_ptr, u8 lpc) {
     if (lpc != '\n') putchar('\n');
     for (u8 i = 0; i < TAPE_BEG_CHARS; i++) {
         ch = *(tape_left_bound + i);
-        if (ch >= 33) putchar(ch);
-        else print_cc(ch);
+        if (32 < ch && ch < 127) putchar(ch);
+        else if (ch <= 32) print_cc(ch);
+        else if (ch == 127) print_cc(33); // DL
+        else print_cc(39); // checkered box
     } putchar('\n');
 
     ptr_pos = tape_ptr - tape_left_bound + 1;
