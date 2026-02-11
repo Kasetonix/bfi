@@ -41,7 +41,6 @@ i8 *stack_top(PtrStack *stack);
 void stack_push(PtrStack *stack, i8 *ptr);
 i8 *stack_pop(PtrStack *stack);
 void read_src_to_da(FILE *file, CharDA *instructions);
-bool valid_loops(CharDA *instructions);
 void build_jumptable(CharDA *instructions, PtrDA *jumptable);
 void print_cc(u8 code);
 void print_tape(u8 *tape_left_bound, u8 *tape_ptr, u8 lpc);

@@ -1,4 +1,3 @@
-#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,23 +31,6 @@ int main(int argc, char *argv[]) {
     fclose(src_file);
 
     build_jumptable(&instructions, &jumptable);
-
-    // i8 *matching;
-    // printf("instruction table range:\n         %p -- %p\n", instructions.data, instructions.data + instructions.length);
-    // for (size_t i = 0; i < instructions.length; i++) {
-    //     printf("%*lu | %c | ", (int) log10((double) instructions.length) + 1, i, instructions.data[i]);
-    //     if (jumptable.data[i] == NULL) {
-    //         putchar('\n');
-    //         continue;
-    //     } 
-    //
-    //     matching = jumptable.data[i];
-    //     if (*matching == ']') 
-    //         printf("obr: condjump to %*lu", (int) log10((double) instructions.length), matching - instructions.data);
-    //     if (*matching == '[') 
-    //         printf("cbr: condjump to %*lu", (int) log10((double) instructions.length), matching - instructions.data);
-    //     putchar('\n');
-    // }
 
     run(&instructions, &jumptable, tape);
     free(instructions.data);
@@ -155,7 +137,7 @@ bool valid_loops(CharDA *instructions) {
     return depth == 0? true : false;
 }
 
-// builds a bracket jumptable
+// builds a bracket jumptable and checks for invalid bracket pairs
 void build_jumptable(CharDA *instructions, PtrDA *jumptable) {
     // initializing the jumptable
     jumptable->length = instructions->length;
@@ -165,7 +147,7 @@ void build_jumptable(CharDA *instructions, PtrDA *jumptable) {
         error("[ERR]: Failed to allocate memory.\n");
 
     size_t matching_obr_index, instr_len = instructions->length;
-    ssize_t depth = 0;
+    size_t depth = 0;
     i8 *matching_obr;
     PtrStack obr;
     stack_init(&obr);
@@ -174,17 +156,18 @@ void build_jumptable(CharDA *instructions, PtrDA *jumptable) {
         if (instructions->data[i] == '[') {
             if (++depth >= obr.capacity)
                 error("[ERR]: Stack overflowed when pushing an opening bracket on the stack.\n");
+
             stack_push(&obr, &instructions->data[i]);
         } else if (instructions->data[i] == ']') {
-            if (--depth < 0)
+            if (depth == 0)
                 error("[ERR]: Invalid bracket pairs found.\n");
+            depth--;
 
             matching_obr = stack_pop(&obr);
             matching_obr_index = (matching_obr - instructions->data); 
             jumptable->data[i] = matching_obr;
             jumptable->data[matching_obr_index] = &instructions->data[i];
         }
-
     }
 
     if (depth != 0)
@@ -248,8 +231,14 @@ void run(CharDA *instructions, PtrDA *jumptable, u8 *tape_ptr) {
                 tape_ptr--; break;
             case '.': lpc = *tape_ptr; putchar(lpc); break;
             case ',': *tape_ptr = getchar(); break;
-            case '[': if (*tape_ptr == 0) instr_ptr = jumptable->data[instr_ptr - instructions->data]; break;
-            case ']': if (*tape_ptr != 0) instr_ptr = jumptable->data[instr_ptr - instructions->data]; break;
+            case '[': 
+                if (*tape_ptr == 0) 
+                    instr_ptr = jumptable->data[instr_ptr - instructions->data];
+                break;
+            case ']': 
+                if (*tape_ptr != 0) 
+                    instr_ptr = jumptable->data[instr_ptr - instructions->data]; 
+                break;
             case '#': print_tape(tape_left_bound, tape_ptr, lpc); break;
         }
 
