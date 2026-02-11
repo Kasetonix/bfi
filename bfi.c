@@ -1,3 +1,5 @@
+#include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -12,6 +14,7 @@
 
 int main(int argc, char *argv[]) {
     CharDA instructions;
+    PtrDA jumptable;
     u8 tape[TAPE_LEN] = { 0 };
     FILE *src_file = NULL;
 
@@ -24,14 +27,30 @@ int main(int argc, char *argv[]) {
     const char *path = argv[1];
 
     open_file(&src_file, path);
-    da_init(&instructions);
+    char_da_init(&instructions);
     read_src_to_da(src_file, &instructions);
     fclose(src_file);
 
-    if (!valid_loops(&instructions))
-        error("[ERR]: Invalid loops found.\n");
+    build_jumptable(&instructions, &jumptable);
 
-    run(&instructions, tape);
+    // i8 *matching;
+    // printf("instruction table range:\n         %p -- %p\n", instructions.data, instructions.data + instructions.length);
+    // for (size_t i = 0; i < instructions.length; i++) {
+    //     printf("%*lu | %c | ", (int) log10((double) instructions.length) + 1, i, instructions.data[i]);
+    //     if (jumptable.data[i] == NULL) {
+    //         putchar('\n');
+    //         continue;
+    //     } 
+    //
+    //     matching = jumptable.data[i];
+    //     if (*matching == ']') 
+    //         printf("obr: condjump to %*lu", (int) log10((double) instructions.length), matching - instructions.data);
+    //     if (*matching == '[') 
+    //         printf("cbr: condjump to %*lu", (int) log10((double) instructions.length), matching - instructions.data);
+    //     putchar('\n');
+    // }
+
+    run(&instructions, &jumptable, tape);
     free(instructions.data);
     return 0;
 }
@@ -51,8 +70,8 @@ void open_file(FILE **file, const char* path) {
     }
 }
 
-// Initializes a dynamic array
-void da_init(CharDA *array) {
+// Initializes a dynamic array of chars
+void char_da_init(CharDA *array) {
     array->length = 0;
     array->capacity = INIT_DA_CAPACITY;
     array->data = malloc(array->capacity * sizeof(i8));
@@ -61,8 +80,8 @@ void da_init(CharDA *array) {
         error("[ERR]: Failed to allocate memory.\n");
 }
 
-// Appends to a dynamic array
-void da_append(CharDA *array, i8 val) {
+// Appends to a dynamic array of chars
+void char_da_append(CharDA *array, i8 val) {
     if (array->length < array->capacity) {
         array->data[array->length++] = val;
         return;
@@ -116,7 +135,7 @@ void read_src_to_da(FILE *file, CharDA *instructions) {
             ch == '>' || ch == '<' ||
             ch == '[' || ch == ']' ||
             ch == '.' || ch == ',' || ch == '#')
-            da_append(instructions, ch);
+            char_da_append(instructions, ch);
         ch = fgetc(file);
     }
 }
@@ -134,6 +153,42 @@ bool valid_loops(CharDA *instructions) {
     }
 
     return depth == 0? true : false;
+}
+
+// builds a bracket jumptable
+void build_jumptable(CharDA *instructions, PtrDA *jumptable) {
+    // initializing the jumptable
+    jumptable->length = instructions->length;
+    jumptable->capacity = instructions->capacity;
+    jumptable->data = calloc(jumptable->capacity, sizeof(i8 *));
+    if (jumptable->data == NULL)
+        error("[ERR]: Failed to allocate memory.\n");
+
+    size_t matching_obr_index, instr_len = instructions->length;
+    ssize_t depth = 0;
+    i8 *matching_obr;
+    PtrStack obr;
+    stack_init(&obr);
+
+    for (size_t i = 0; i < instr_len; i++) {
+        if (instructions->data[i] == '[') {
+            if (++depth >= obr.capacity)
+                error("[ERR]: Stack overflowed when pushing an opening bracket on the stack.\n");
+            stack_push(&obr, &instructions->data[i]);
+        } else if (instructions->data[i] == ']') {
+            if (--depth < 0)
+                error("[ERR]: Invalid bracket pairs found.\n");
+
+            matching_obr = stack_pop(&obr);
+            matching_obr_index = (matching_obr - instructions->data); 
+            jumptable->data[i] = matching_obr;
+            jumptable->data[matching_obr_index] = &instructions->data[i];
+        }
+
+    }
+
+    if (depth != 0)
+        error("[ERR]: Invalid bracket pairs found.\n");
 }
 
 #ifdef _POSIX_SOURCE
@@ -170,51 +225,8 @@ void print_tape(u8 *tape_left_bound, u8 *tape_ptr, u8 lpc) {
         printf("%*c\n", (int) ptr_pos, '^');
 }
 
-// Manually finds the matching closing bracket
-i8 *find_matching_cbr(i8 *instr_ptr) {
-    size_t depth = 0;
-    while (true) {
-        instr_ptr++;
-        if (*instr_ptr == ']') {
-            if (depth == 0) break;
-            else depth--;
-        }
-
-        if (*instr_ptr == '[')
-            depth++;
-    }
-
-    return instr_ptr;
-}
-
-// Function for handling opening brackets
-void handle_obr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr) {
-    if (stack_top(obr) != *instr_ptr) { // First entry into this obr
-        if (*tape_ptr == 0) // Immidiately jumping after the manually found matching cbr
-            *instr_ptr = find_matching_cbr(*instr_ptr);
-        else
-            stack_push(obr, *instr_ptr);
-    }
-}
-
-// Function for handling closing brackets
-void handle_cbr(i8 **instr_ptr, u8 *tape_ptr, PtrStack *obr, PtrStack *cbr) {
-    if (*tape_ptr != 0) { // jump to matching obr
-        if (stack_top(cbr) != *instr_ptr)
-            stack_push(cbr, *instr_ptr);
-        *instr_ptr = stack_top(obr);
-    } else {
-        if (stack_top(cbr) == *instr_ptr)
-            stack_pop(cbr);
-        stack_pop(obr);
-    }
-}
-
 // Runs the program reading from instruction array
-void run(CharDA *instructions, u8 *tape_ptr) {
-    PtrStack obr, cbr; // opening/closing bracket stack
-    stack_init(&obr);
-    stack_init(&cbr);
+void run(CharDA *instructions, PtrDA *jumptable, u8 *tape_ptr) {
     u8 lpc= '\n'; // last printed char
 
     i8 *instr_ptr = instructions->data;
@@ -236,8 +248,8 @@ void run(CharDA *instructions, u8 *tape_ptr) {
                 tape_ptr--; break;
             case '.': lpc = *tape_ptr; putchar(lpc); break;
             case ',': *tape_ptr = getchar(); break;
-            case '[': handle_obr(&instr_ptr, tape_ptr, &obr); break;
-            case ']': handle_cbr(&instr_ptr, tape_ptr, &obr, &cbr); break;
+            case '[': if (*tape_ptr == 0) instr_ptr = jumptable->data[instr_ptr - instructions->data]; break;
+            case ']': if (*tape_ptr != 0) instr_ptr = jumptable->data[instr_ptr - instructions->data]; break;
             case '#': print_tape(tape_left_bound, tape_ptr, lpc); break;
         }
 
