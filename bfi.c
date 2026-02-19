@@ -35,13 +35,13 @@ int main(int argc, char *argv[]) {
     run(&instructions, &jumptable, tape);
     free(instructions.data);
     free(jumptable.data);
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 // Prints an error message and exits
 void error(const char *msg) {
     fputs(msg, stderr);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 // Opens a file for reading
@@ -49,7 +49,7 @@ void open_file(FILE **file, const char* path) {
     *file = fopen(path, "r");
     if (*file == NULL) {
         fprintf(stderr, "[ERR]: Couldn't open file '%s'.\n", path);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 }
 
