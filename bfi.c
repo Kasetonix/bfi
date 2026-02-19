@@ -34,6 +34,7 @@ int main(int argc, char *argv[]) {
 
     run(&instructions, &jumptable, tape);
     free(instructions.data);
+    free(jumptable.data);
     return 0;
 }
 
@@ -56,7 +57,7 @@ void open_file(FILE **file, const char* path) {
 void char_da_init(CharDA *array) {
     array->length = 0;
     array->capacity = INIT_DA_CAPACITY;
-    array->data = malloc(array->capacity * sizeof(i8));
+    array->data = malloc(array->capacity * sizeof(array->data));
 
     if (array->data == NULL)
         error("[ERR]: Failed to allocate memory.\n");
@@ -70,7 +71,7 @@ void char_da_append(CharDA *array, i8 val) {
     }
 
     array->capacity *= 2;
-    array->data = realloc(array->data, array->capacity * sizeof(i8));
+    array->data = realloc(array->data, array->capacity * sizeof(array->data));
 
     if (array->data == NULL)
         error("[ERR]: Failed to allocate memory.\n");
@@ -122,27 +123,12 @@ void read_src_to_da(FILE *file, CharDA *instructions) {
     }
 }
 
-// Checks validity of all [ ] pairs
-bool valid_loops(CharDA *instructions) {
-    i8 depth = 0;
-    for (size_t i = 0; i < instructions->length; i++) {
-        if (instructions->data[i] == '[')
-            depth++;
-        else if (instructions->data[i] == ']')
-            depth--;
-        if (depth < 0)
-            return false;
-    }
-
-    return depth == 0? true : false;
-}
-
 // builds a bracket jumptable and checks for invalid bracket pairs
 void build_jumptable(CharDA *instructions, PtrDA *jumptable) {
     // initializing the jumptable
     jumptable->length = instructions->length;
     jumptable->capacity = instructions->capacity;
-    jumptable->data = calloc(jumptable->capacity, sizeof(i8 *));
+    jumptable->data = calloc(jumptable->capacity, sizeof(jumptable->data));
     if (jumptable->data == NULL)
         error("[ERR]: Failed to allocate memory.\n");
 
@@ -210,14 +196,14 @@ void print_tape(u8 *tape_left_bound, u8 *tape_ptr, u8 lpc) {
 
 // Runs the program reading from instruction array
 void run(CharDA *instructions, PtrDA *jumptable, u8 *tape_ptr) {
-    u8 lpc= '\n'; // last printed char
+    u8 lpc = '\n'; // last printed char
 
     i8 *instr_ptr = instructions->data;
-    i8 *instr_end = instr_ptr + instructions->length;
+    i8 *instr_end = instr_ptr + instructions->length - 1;
     u8 *tape_left_bound = tape_ptr;
     u8 *tape_right_bound = tape_ptr + TAPE_LEN - 1;
 
-    while (instr_ptr < instr_end) {
+    while (instr_ptr <= instr_end) {
         switch (*instr_ptr) {
             case '+': (*tape_ptr)++; break;
             case '-': (*tape_ptr)--; break;
